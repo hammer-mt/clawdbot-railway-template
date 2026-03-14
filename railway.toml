@@ -10,8 +10,8 @@ restartPolicyType = "on_failure"
 requiredMountPath = "/data"
 
 [variables]
-# NOTE: Railway injects PORT automatically.
-# Do not set PORT here; Railway templates may not apply it reliably and hardcoding
-# can cause domain routing mismatches.
+# Explicitly set PORT to 8080 to avoid domain routing mismatches.
+# Railway's domain targetPort must also be set to 8080 (done via GraphQL API during setup).
+PORT = "8080"
 OPENCLAW_STATE_DIR = "/data/.openclaw"
 OPENCLAW_WORKSPACE_DIR = "/data/workspace"

@@ -51,6 +51,13 @@ RUN apt-get update \
     python3-venv \
   && rm -rf /var/lib/apt/lists/*
 
+# Install Google Cloud SDK (for gcloud storage and other GCP services)
+RUN curl -sSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz \
+    | tar -xz -C /opt \
+  && /opt/google-cloud-sdk/install.sh --quiet --path-update false \
+  && ln -sf /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud \
+  && ln -sf /opt/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil
+
 # `openclaw update` expects pnpm. Provide it in the runtime image.
 RUN corepack enable && corepack prepare pnpm@10.23.0 --activate
 
@@ -76,7 +83,15 @@ COPY --from=openclaw-build /openclaw /openclaw
 RUN printf '%s\n' '#!/usr/bin/env bash' 'exec node /openclaw/dist/entry.js "$@"' > /usr/local/bin/openclaw \
   && chmod +x /usr/local/bin/openclaw
 
+# Install Google Workspace CLI (gws) for Gmail, Calendar, Drive, Docs, Sheets
+RUN npm install -g @googleworkspace/cli && npm cache clean --force
+
 COPY src ./src
+
+# Bootstrap script: writes GWS and GCloud credentials from env vars on startup.
+# This allows secrets to be stored as Railway variables and reconstituted at boot.
+COPY scripts/bootstrap-credentials.sh /usr/local/bin/bootstrap-credentials.sh
+RUN chmod +x /usr/local/bin/bootstrap-credentials.sh
 
 # The wrapper listens on $PORT.
 # IMPORTANT: Do not set a default PORT here.
@@ -86,4 +101,4 @@ EXPOSE 8080
 
 # Ensure PID 1 reaps zombies and forwards signals.
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "src/server.js"]
+CMD ["sh", "-c", "bootstrap-credentials.sh && node src/server.js"]
