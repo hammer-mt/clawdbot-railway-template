@@ -487,7 +487,83 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
   </div>
 
   <div class="card">
-    <h2>2b) Advanced: Custom OpenAI-compatible provider (optional)</h2>
+    <h2>2b) Google & Cloud integrations (optional)</h2>
+    <p class="muted">Connect Gmail, Calendar, Drive, Google Cloud Storage, and/or Cloudflare R2. These require credentials set up on your local machine first.</p>
+
+    <details>
+      <summary><strong>Google Workspace</strong> (Gmail, Calendar, Drive, Docs, Sheets)</summary>
+      <div style="margin-top:0.5rem">
+        <p class="muted">
+          <strong>Prerequisites:</strong> You need a Google Cloud project with an OAuth consent screen and a Desktop OAuth client ID.
+          Then install <code>gws</code> locally (<code>npm install -g @googleworkspace/cli</code>), run <code>gws auth login</code>,
+          and export with <code>gws auth export --unmasked</code>.
+        </p>
+        <label>GWS Client ID</label>
+        <input id="gwsClientId" placeholder="123456-xxxxx.apps.googleusercontent.com" />
+        <label>GWS Client Secret</label>
+        <input id="gwsClientSecret" type="password" placeholder="GOCSPX-..." />
+        <label>GWS Refresh Token</label>
+        <input id="gwsRefreshToken" type="password" placeholder="1//0..." />
+        <label>GCP Project ID</label>
+        <input id="gwsProjectId" placeholder="gen-lang-client-xxxxx (from your Google Cloud console)" />
+        <label>Gmail address (for skill instructions)</label>
+        <input id="gwsEmail" placeholder="mybot@gmail.com" />
+      </div>
+    </details>
+
+    <details style="margin-top:0.5rem">
+      <summary><strong>Google Cloud Storage</strong></summary>
+      <div style="margin-top:0.5rem">
+        <p class="muted">Uses the same Google credentials above. Just needs the Cloud Storage API enabled and Storage Admin role on the bot Gmail.</p>
+        <label><input type="checkbox" id="gcsEnabled" /> Enable GCS skill</label>
+      </div>
+    </details>
+
+    <details style="margin-top:0.5rem">
+      <summary><strong>Cloudflare R2</strong></summary>
+      <div style="margin-top:0.5rem">
+        <label>R2 Account ID</label>
+        <input id="r2AccountId" placeholder="1900bb2c7eb62b..." />
+        <label>R2 Access Key ID</label>
+        <input id="r2AccessKeyId" type="password" placeholder="" />
+        <label>R2 Secret Access Key</label>
+        <input id="r2SecretAccessKey" type="password" placeholder="" />
+        <label>R2 Bucket Name</label>
+        <input id="r2Bucket" placeholder="my-bucket" />
+        <label>R2 Public URL (optional)</label>
+        <input id="r2PublicUrl" placeholder="https://pub-xxxx.r2.dev" />
+      </div>
+    </details>
+
+    <details style="margin-top:0.5rem">
+      <summary><strong>OpenRouter</strong> (alternative LLM provider)</summary>
+      <div style="margin-top:0.5rem">
+        <label>OpenRouter API Key</label>
+        <input id="openrouterKey" type="password" placeholder="sk-or-v1-..." />
+      </div>
+    </details>
+
+    <details style="margin-top:0.5rem">
+      <summary><strong>Brave Search</strong> (web search tool)</summary>
+      <div style="margin-top:0.5rem">
+        <label>Brave Search API Key</label>
+        <input id="braveSearchKey" type="password" placeholder="" />
+      </div>
+    </details>
+
+    <details style="margin-top:0.5rem">
+      <summary><strong>ElevenLabs</strong> (text-to-speech)</summary>
+      <div style="margin-top:0.5rem">
+        <label>ElevenLabs API Key</label>
+        <input id="elevenlabsKey" type="password" placeholder="" />
+        <label>Voice ID</label>
+        <input id="elevenlabsVoiceId" placeholder="iZURAYccQtQd12U8kEcq" />
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>2c) Advanced: Custom OpenAI-compatible provider (optional)</h2>
     <p class="muted">Use this to configure an OpenAI-compatible API that requires a custom base URL (e.g. Ollama, vLLM, LM Studio, hosted proxies). You usually set the API key as a Railway variable and reference it here.</p>
 
     <label>Provider id (e.g. ollama, deepseek, myproxy)</label>
@@ -862,6 +938,194 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
         extra += `\n[slack config] exit=${set.code} (output ${set.output.length} chars)\n${set.output || "(no output)"}`;
         extra += `\n[slack verify] exit=${get.code} (output ${get.output.length} chars)\n${get.output || "(no output)"}`;
       }
+    }
+
+    // --- Google Workspace credentials ---
+    if (payload.gwsClientId?.trim() && payload.gwsClientSecret?.trim() && payload.gwsRefreshToken?.trim()) {
+      const gwsDir = path.join(STATE_DIR, "gws");
+      fs.mkdirSync(gwsDir, { recursive: true });
+
+      const gwsCreds = {
+        client_id: payload.gwsClientId.trim(),
+        client_secret: payload.gwsClientSecret.trim(),
+        refresh_token: payload.gwsRefreshToken.trim(),
+        type: "authorized_user",
+      };
+      fs.writeFileSync(path.join(gwsDir, "credentials.json"), JSON.stringify(gwsCreds, null, 2), { mode: 0o600 });
+
+      if (payload.gwsProjectId?.trim()) {
+        const clientSecret = {
+          installed: {
+            client_id: payload.gwsClientId.trim(),
+            client_secret: payload.gwsClientSecret.trim(),
+            project_id: payload.gwsProjectId.trim(),
+            auth_uri: "https://accounts.google.com/o/oauth2/auth",
+            token_uri: "https://oauth2.googleapis.com/token",
+          },
+        };
+        fs.writeFileSync(path.join(gwsDir, "client_secret.json"), JSON.stringify(clientSecret, null, 2), { mode: 0o600 });
+      }
+
+      // Write gcloud application default credentials for GCS access
+      const gcloudDir = path.join(os.homedir(), ".config", "gcloud");
+      fs.mkdirSync(gcloudDir, { recursive: true });
+      fs.writeFileSync(path.join(gcloudDir, "application_default_credentials.json"), JSON.stringify(gwsCreds, null, 2), { mode: 0o600 });
+
+      // Set env pointers
+      process.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = path.join(gwsDir, "credentials.json");
+
+      extra += `\n[gws] Credentials written to ${gwsDir}`;
+
+      // Install Google Workspace skill
+      const gwsEmail = payload.gwsEmail?.trim() || "configured account";
+      const gwsSkillDir = path.join(STATE_DIR, "skills", "google-workspace");
+      fs.mkdirSync(gwsSkillDir, { recursive: true });
+      fs.writeFileSync(path.join(gwsSkillDir, "SKILL.md"), [
+        "---",
+        "name: google-workspace",
+        `description: Manage Gmail, Google Calendar, Drive, Docs, Sheets for ${gwsEmail} using gws CLI.`,
+        "metadata:",
+        "  openclaw:",
+        '    emoji: "\\U0001F4E7"',
+        "---",
+        "",
+        "# Google Workspace CLI (gws)",
+        "",
+        `Manage Google Workspace for **${gwsEmail}** via the \`gws\` CLI.`,
+        "",
+        "## Auth",
+        "Already configured. Do not run `gws auth login`.",
+        "",
+        "## Gmail",
+        "```bash",
+        "gws gmail users messages list --max-results 10",
+        "gws gmail users messages get --id <messageId> --format full",
+        "gws gmail users labels list",
+        "```",
+        "",
+        "## Calendar",
+        "```bash",
+        'gws calendar events list --calendar-id primary --time-min "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --max-results 10 --single-events --order-by startTime',
+        "gws calendar events insert --calendar-id primary --summary \"Meeting\" --start-date-time \"...\" --end-date-time \"...\"",
+        "```",
+        "",
+        "## Drive",
+        "```bash",
+        "gws drive files list --page-size 10",
+        "gws drive files create --name \"doc.txt\" --upload-file /path/to/file",
+        "```",
+        "",
+        "## Tip",
+        "Use `--help` on any subcommand. Subcommands follow the Google API hierarchy.",
+      ].join("\n"));
+      extra += `\n[gws] Skill installed at ${gwsSkillDir}`;
+
+      // Install GCS skill if enabled
+      if (payload.gcsEnabled) {
+        const gcsSkillDir = path.join(STATE_DIR, "skills", "google-cloud-storage");
+        fs.mkdirSync(gcsSkillDir, { recursive: true });
+        const gcpProject = payload.gwsProjectId?.trim() || "unknown";
+        fs.writeFileSync(path.join(gcsSkillDir, "SKILL.md"), [
+          "---",
+          "name: google-cloud-storage",
+          `description: Manage Google Cloud Storage buckets and objects on project ${gcpProject}.`,
+          "metadata:",
+          "  openclaw:",
+          '    emoji: "\\u2601\\uFE0F"',
+          "---",
+          "",
+          "# Google Cloud Storage",
+          "",
+          "## Auth",
+          "Define this alias before running commands:",
+          "```bash",
+          'gcs() { CLOUDSDK_AUTH_ACCESS_TOKEN=$(/opt/google-cloud-sdk/bin/gcloud auth application-default print-access-token 2>/dev/null) /opt/google-cloud-sdk/bin/gcloud storage "$@"; }',
+          "```",
+          "",
+          "## Commands",
+          "```bash",
+          "gcs ls                                    # list buckets",
+          "gcs ls gs://bucket/                       # list objects",
+          "gcs cp file gs://bucket/                  # upload",
+          "gcs cp gs://bucket/file ./                # download",
+          "gcs cp -r dir gs://bucket/dir/            # upload dir",
+          "gcs rm gs://bucket/file                   # delete",
+          "gcs rsync -r ./local gs://bucket/path/    # sync",
+          "gcs buckets create gs://name --location=us-central1",
+          "```",
+        ].join("\n"));
+        extra += `\n[gcs] Skill installed at ${gcsSkillDir}`;
+      }
+    }
+
+    // --- Cloudflare R2 ---
+    if (payload.r2AccessKeyId?.trim() && payload.r2SecretAccessKey?.trim()) {
+      const r2SkillDir = path.join(STATE_DIR, "skills", "cloudflare-r2");
+      fs.mkdirSync(r2SkillDir, { recursive: true });
+      const bucket = payload.r2Bucket?.trim() || "my-bucket";
+      const publicUrl = payload.r2PublicUrl?.trim() || "";
+      const endpoint = `https://${(payload.r2AccountId || "").trim()}.r2.cloudflarestorage.com`;
+      fs.writeFileSync(path.join(r2SkillDir, "SKILL.md"), [
+        "---",
+        "name: cloudflare-r2",
+        `description: Manage Cloudflare R2 object storage. Bucket: ${bucket}.`,
+        "metadata:",
+        "  openclaw:",
+        '    emoji: "\\U0001F4BE"',
+        "---",
+        "",
+        "# Cloudflare R2",
+        "",
+        `Bucket: \`${bucket}\``,
+        publicUrl ? `Public URL: ${publicUrl}` : "",
+        `Endpoint: \`${endpoint}\``,
+        "",
+        "## Usage with rclone",
+        "The rclone config at `/root/.config/rclone/rclone.conf` has an `r2:` remote configured.",
+        "```bash",
+        `rclone ls r2:${bucket}`,
+        `rclone copy /path/to/file r2:${bucket}/`,
+        `rclone sync /path/to/dir r2:${bucket}/prefix/`,
+        "```",
+      ].join("\n"));
+      extra += `\n[r2] Skill installed`;
+    }
+
+    // --- Brave Search ---
+    if (payload.braveSearchKey?.trim()) {
+      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "tools.web.search.apiKey", payload.braveSearchKey.trim()]));
+      extra += `\n[brave] Web search API key configured`;
+    }
+
+    // --- ElevenLabs TTS ---
+    if (payload.elevenlabsKey?.trim()) {
+      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "messages.tts.elevenlabs.apiKey", payload.elevenlabsKey.trim()]));
+      if (payload.elevenlabsVoiceId?.trim()) {
+        await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "messages.tts.elevenlabs.voiceId", payload.elevenlabsVoiceId.trim()]));
+      }
+      extra += `\n[elevenlabs] TTS configured`;
+    }
+
+    // --- OpenRouter ---
+    if (payload.openrouterKey?.trim()) {
+      const orCfg = {
+        baseUrl: "https://openrouter.ai/api/v1",
+        api: "openai-completions",
+        apiKey: payload.openrouterKey.trim(),
+      };
+      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "models.mode", "merge"]));
+      await runCmd(OPENCLAW_NODE, clawArgs(["config", "set", "--json", "models.providers.openrouter", JSON.stringify(orCfg)]));
+      extra += `\n[openrouter] Provider configured`;
+    }
+
+    // --- Auto-configure allowed origins for Control UI ---
+    const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+    if (railwayDomain) {
+      await runCmd(
+        OPENCLAW_NODE,
+        clawArgs(["config", "set", "--json", "gateway.controlUi.allowedOrigins", JSON.stringify([`https://${railwayDomain}`])]),
+      );
+      extra += `\n[controlUi] Allowed origin set to https://${railwayDomain}`;
     }
 
     // Apply changes immediately.
@@ -1356,7 +1620,10 @@ function requireDashboardAuth(req, res, next) {
 // cannot set custom Authorization headers for WebSocket connections, so we inject
 // the token into proxied requests at the wrapper level.
 function attachGatewayAuthHeader(req) {
-  if (!req?.headers?.authorization && OPENCLAW_GATEWAY_TOKEN) {
+  // Always override: the browser may send Basic auth (for SETUP_PASSWORD),
+  // but the gateway expects Bearer token. Without this, the Control UI
+  // gets "gateway token missing" errors when SETUP_PASSWORD is set.
+  if (OPENCLAW_GATEWAY_TOKEN) {
     req.headers.authorization = `Bearer ${OPENCLAW_GATEWAY_TOKEN}`;
   }
 }

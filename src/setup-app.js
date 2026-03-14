@@ -163,7 +163,24 @@
       customProviderBaseUrl: document.getElementById('customProviderBaseUrl').value,
       customProviderApi: document.getElementById('customProviderApi').value,
       customProviderApiKeyEnv: document.getElementById('customProviderApiKeyEnv').value,
-      customProviderModelId: document.getElementById('customProviderModelId').value
+      customProviderModelId: document.getElementById('customProviderModelId').value,
+
+      // Google & Cloud integrations
+      gwsClientId: (document.getElementById('gwsClientId') || {}).value || '',
+      gwsClientSecret: (document.getElementById('gwsClientSecret') || {}).value || '',
+      gwsRefreshToken: (document.getElementById('gwsRefreshToken') || {}).value || '',
+      gwsProjectId: (document.getElementById('gwsProjectId') || {}).value || '',
+      gwsEmail: (document.getElementById('gwsEmail') || {}).value || '',
+      gcsEnabled: (document.getElementById('gcsEnabled') || {}).checked || false,
+      r2AccountId: (document.getElementById('r2AccountId') || {}).value || '',
+      r2AccessKeyId: (document.getElementById('r2AccessKeyId') || {}).value || '',
+      r2SecretAccessKey: (document.getElementById('r2SecretAccessKey') || {}).value || '',
+      r2Bucket: (document.getElementById('r2Bucket') || {}).value || '',
+      r2PublicUrl: (document.getElementById('r2PublicUrl') || {}).value || '',
+      openrouterKey: (document.getElementById('openrouterKey') || {}).value || '',
+      braveSearchKey: (document.getElementById('braveSearchKey') || {}).value || '',
+      elevenlabsKey: (document.getElementById('elevenlabsKey') || {}).value || '',
+      elevenlabsVoiceId: (document.getElementById('elevenlabsVoiceId') || {}).value || ''
     };
 
     logEl.textContent = 'Running...\n';
